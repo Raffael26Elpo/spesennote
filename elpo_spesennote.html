@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELPO – Spesennote Privatfahrzeug</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="pdf.min.js"></script>
+
+<style>
+  :root {
+    --elpo-blue:    #1D58A9;
+    --elpo-blue2:   #5773B5;
+    --elpo-blue3:   #A5B5E0;
+    --elpo-red:     #98112E;
+    --elpo-green:   #B3C420;
+    --elpo-maroon:  #4A0420;
+    --elpo-orange:  #C66E1D;
+    --elpo-gray:    #9CA9B6;
+    --bg:    #f4f6fa;
+    --card:  #ffffff;
+    --border:#e2e8f0;
+    --text:  #1e293b;
+    --muted: #64748b;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { height: 100%; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* HEADER */
+  header {
+    background: var(--elpo-blue);
+    color: white;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 58px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  }
+  .logo-wrap { display:flex; align-items:center; gap:12px; }
+  .logo-img { height:36px; width:auto; filter: brightness(0) invert(1); }
+  .header-sub { font-size:0.8rem; color:rgba(255,255,255,0.7); font-weight:400; margin-top:1px; }
+  .header-title-wrap { display:flex; flex-direction:column; }
+  .header-main { font-size:1rem; font-weight:700; letter-spacing:0.03em; }
+
+  /* FACHBEREICHE BAR */
+  .fachbereiche {
+    display: flex;
+    height: 28px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+  }
+  .fb { display:flex; align-items:center; justify-content:center; flex:1; color:white; white-space:nowrap; padding:0 8px; }
+  .fb-electro  { background: var(--elpo-red); }
+  .fb-green    { background: var(--elpo-green); color: #fff; }
+  .fb-auto     { background: var(--elpo-maroon); }
+  .fb-photo    { background: var(--elpo-orange); }
+  .fb-service  { background: var(--elpo-gray); }
+
+  /* TABS */
+  .tabs {
+    background: #16213e;
+    display:flex; gap:2px; padding:0 2rem;
+  }
+  .tab {
+    padding:0.65rem 1.4rem; color:rgba(255,255,255,0.55);
+    cursor:pointer; font-size:0.84rem; font-weight:500;
+    border-bottom:3px solid transparent; transition:all .2s; user-select:none;
+  }
+  .tab:hover { color:rgba(255,255,255,0.85); }
+  .tab.active { color:white; border-bottom-color: var(--elpo-orange); }
+
+  /* MAIN */
+  main { max-width:1100px; margin:2rem auto; padding:0 1.5rem; flex:1; width:100%; }
+  .panel { display:none; }
+  .panel.active { display:block; }
+
+  /* MONTH BAR */
+  .month-switch {
+    display:flex; align-items:center; gap:0.75rem; margin-bottom:1.2rem;
+    background: var(--card); border:1px solid var(--border);
+    border-radius:10px; padding:0.6rem 1rem;
+  }
+  .month-switch label { font-size:0.78rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; }
+  .month-switch select {
+    padding:0.4rem 0.7rem; border:1.5px solid var(--border); border-radius:7px;
+    font-size:0.88rem; font-family:var(--font); background:white; cursor:pointer; outline:none;
+  }
+  .month-switch select:focus { border-color: var(--elpo-orange); }
+
+  /* CARDS */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.4rem; margin-bottom:1.4rem; box-shadow:0 1px 4px rgba(0,0,0,0.05); }
+  .card-title {
+    font-size:0.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:1.1rem; display:flex; align-items:center; gap:8px;
+  }
+  .card-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* FORMS */
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; align-items:end; }
+  .form-group label { display:block; font-size:0.76rem; font-weight:600; color:var(--muted); margin-bottom:.35rem; letter-spacing:.03em; }
+  .form-group input, .form-group select {
+    width:100%; padding:0.5rem 0.75rem; border:1.5px solid var(--border);
+    border-radius:8px; font-size:0.88rem; font-family:var(--font); background:#fafafa; color:var(--text); transition:border-color .15s; outline:none;
+  }
+  .form-group input:focus, .form-group select:focus { border-color:var(--elpo-orange); background:white; }
+
+  /* BUTTONS */
+  .btn { padding:.5rem 1.1rem; border-radius:8px; font-size:.85rem; font-weight:600; cursor:pointer; border:none; transition:all .15s; display:inline-flex; align-items:center; gap:5px; font-family:var(--font); }
+  .btn-primary { background:var(--elpo-blue); color:white; }
+  .btn-primary:hover { background:#174d96; transform:translateY(-1px); }
+  .btn-accent { background:var(--elpo-orange); color:white; }
+  .btn-accent:hover { background:#b05e15; }
+  .btn-outline { background:transparent; color:var(--text); border:1.5px solid var(--border); }
+  .btn-outline:hover { border-color:#94a3b8; background:#f8fafc; }
+  .btn-danger { background:transparent; color:#ef4444; border:1.5px solid #fecaca; padding:.28rem .55rem; font-size:.75rem; }
+  .btn-danger:hover { background:#fef2f2; }
+  .btn-success { background:#10b981; color:white; }
+  .btn-success:hover { background:#059669; }
+
+  /* TABLE */
+  .data-table { width:100%; border-collapse:collapse; font-size:.86rem; }
+  .data-table th { background:#f8fafc; font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); padding:.6rem .75rem; text-align:left; border-bottom:2px solid var(--border); }
+  .data-table td { padding:.6rem .75rem; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+  .data-table tr:hover td { background:#fafcff; }
+  .data-table tfoot td { padding:.65rem .75rem; background:#f8fafc; font-weight:700; border-top:2px solid var(--border); }
+
+  /* BADGES */
+  .badge { display:inline-block; padding:.18rem .5rem; border-radius:20px; font-size:.7rem; font-weight:600; }
+  .badge-inland  { background:#dcfce7; color:#15803d; }
+  .badge-ausland { background:#dbeafe; color:#1d4ed8; }
+
+  /* SUMMARY GRID */
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1rem; margin-bottom:1.4rem; }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.1rem; }
+  .stat-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+  .stat-value { font-size:1.5rem; font-weight:700; color:var(--text); line-height:1; margin:.2rem 0 .15rem; }
+  .stat-sub { font-size:.76rem; color:var(--muted); }
+  .stat-card.highlight { background:var(--elpo-blue); border-color:var(--elpo-blue); }
+  .stat-card.highlight .stat-label, .stat-card.highlight .stat-sub { color:rgba(255,255,255,0.65); }
+  .stat-card.highlight .stat-value { color:white; }
+
+  /* DRAG & DROP */
+  .drop-zone {
+    border:2.5px dashed #fbbf24; border-radius:12px; background:#fffbeb;
+    padding:2rem; text-align:center; cursor:pointer; transition:all .2s;
+    position:relative;
+  }
+  .drop-zone.dragging { border-color:var(--elpo-blue); background:#eff6ff; }
+  .drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .drop-icon { font-size:2rem; margin-bottom:.5rem; }
+  .drop-text { font-size:.88rem; color:#92400e; font-weight:600; }
+  .drop-sub { font-size:.76rem; color:var(--muted); margin-top:.3rem; }
+
+  /* INFO BOX */
+  .info-box { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:.7rem 1rem; font-size:.82rem; color:#1e40af; margin-bottom:1rem; }
+  .warn-box { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:.7rem 1rem; font-size:.82rem; color:#92400e; }
+
+  /* EMPTY */
+  .empty { text-align:center; padding:2.5rem; color:var(--muted); font-size:.88rem; }
+  .empty-icon { font-size:2.2rem; margin-bottom:.4rem; }
+
+  .actions-row { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; }
+  .divider { height:1px; background:var(--border); margin:1.1rem 0; }
+
+  @media(max-width:640px){
+    main { padding:0 .9rem; margin:1rem auto; }
+    .form-grid { grid-template-columns:1fr 1fr; }
+    .tabs, header { padding:0 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <img class="logo-img" src="data:image/png;base64,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" alt="ELPO">
+    <div class="header-title-wrap">
+      <div class="header-main">ELPO GmbH</div>
+      <div class="header-sub">Spesenverwaltung · Privatfahrzeug</div>
+    </div>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('erfassung')">Fahrten erfassen</div>
+  <div class="tab" onclick="switchTab('telepass')">Telepass Import</div>
+  <div class="tab" onclick="switchTab('uebersicht')">Monatsübersicht</div>
+  <div class="tab" onclick="switchTab('einstellungen')">Einstellungen</div>
+</div>
+
+<main>
+
+<!-- ERFASSUNG -->
+<div class="panel active" id="tab-erfassung">
+  <div class="month-switch">
+    <label>Monat</label>
+    <select id="erf-monat" onchange="renderFahrten()"></select>
+    <button class="btn btn-outline" onclick="addCurrentMonth()" style="font-size:.8rem;padding:.35rem .7rem">+ Neuer Monat</button>
+    <span id="erf-count" style="margin-left:auto;font-size:.8rem;color:var(--muted)"></span>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Neue Fahrt eintragen</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Datum</label>
+        <input type="date" id="inp-datum">
+      </div>
+      <div class="form-group" style="grid-column:span 2">
+        <label>Ziel / Kunde / Beschreibung</label>
+        <input type="text" id="inp-ziel" placeholder="z.B. Bozen – Kunde XY">
+      </div>
+      <div class="form-group">
+        <label>Gefahrene km</label>
+        <input type="number" id="inp-km" min="0" step="1" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Fahrtpauschale</label>
+        <select id="inp-trasferte">
+          <option value="none">Keine</option>
+          <option value="inland">Inland ITA → €30,99</option>
+          <option value="ausland">Ausland → €51,65</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Bemerkungen</label>
+        <input type="text" id="inp-bem" placeholder="Optional">
+      </div>
+      <div class="form-group" style="padding-top:1.35rem">
+        <button class="btn btn-primary" onclick="addFahrt()">＋ Eintragen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Fahrten des gewählten Monats</div>
+    <div id="fahrten-container"><div class="empty"><div class="empty-icon">🚗</div>Noch keine Fahrten eingetragen.</div></div>
+  </div>
+</div>
+
+<!-- TELEPASS -->
+<div class="panel" id="tab-telepass">
+  <div class="card">
+    <div class="card-title">Telepass Nota Spese – Import</div>
+
+    <!-- ANLEITUNG -->
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:1rem 1.1rem;margin-bottom:1.1rem;font-size:.85rem;line-height:1.7;color:#14532d">
+      <b>So importierst du deine Telepass-Daten:</b><br>
+      1. Öffne die Telepass Nota Spese PDF im Browser oder Adobe Reader<br>
+      2. Drücke <b>Strg+A</b> (alles markieren) → dann <b>Strg+C</b> (kopieren)<br>
+      3. Füge den kopierten Text unten ein und klicke <b>Importieren</b>
+    </div>
+
+    <textarea id="telepass-text-input" style="width:100%;height:170px;font-family:'Courier New',monospace;font-size:.8rem;padding:.7rem;border:1.5px solid var(--border);border-radius:8px;resize:vertical;background:#fafafa;outline:none" placeholder="Kopierten Text hier einfügen ...
+
+Beispiel (Telepass Nota Spese):
+27-06-2026 17:26   Pedaggio   BOLZANO SUD - BRESSANONE   3,70 €
+27-06-2026 08:26   Pedaggio   BRESSANONE - BOLZANO SUD   3,70 €
+25-06-2026 15:02   Pedaggio   BOLZANO SUD - BRESSANONE   3,70 €"></textarea>
+
+    <div style="margin-top:.8rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="importTextMode()">⬆ Importieren</button>
+      <button class="btn btn-outline" onclick="document.getElementById('telepass-text-input').value=''">Leeren</button>
+      <span style="margin-left:auto;font-size:.78rem;color:var(--muted)">
+        oder <button onclick="setMode('pdf')" style="background:none;border:none;color:var(--elpo-blue);cursor:pointer;font-size:.78rem;text-decoration:underline;padding:0">PDF direkt einlesen versuchen</button>
+      </span>
+    </div>
+
+    <!-- PDF MODE (versteckt, optional) -->
+    <div id="mode-pdf" style="display:none;margin-top:1rem">
+      <div class="drop-zone" id="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <input type="file" accept=".pdf" id="pdf-file-input" onchange="handleFileSelect(event)">
+        <div class="drop-icon">📄</div>
+        <div class="drop-text">PDF hierher ziehen oder klicken</div>
+        <div class="drop-sub">Klappt nur wenn die PDF nicht verschlüsselt ist</div>
+      </div>
+    </div>
+
+    <div id="import-status" style="margin-top:1rem;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Importierte Telepass-Einträge</div>
+    <div id="telepass-list-container">
+      <div class="empty"><div class="empty-icon">🛣️</div>Noch keine Telepass-Einträge importiert.</div>
+    </div>
+    <div style="margin-top:.8rem">
+      <button class="btn btn-outline" onclick="clearAllTelepass()" style="font-size:.78rem;color:#ef4444;border-color:#fecaca">Alle Telepass-Einträge löschen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ÜBERSICHT -->
+<div class="panel" id="tab-uebersicht">
+  <div class="month-switch">
+    <label>Monat</label>
+    <select id="sel-monat" onchange="renderUebersicht()"></select>
+    <div class="actions-row" style="margin-left:auto">
+      <button class="btn btn-success" onclick="exportPDF()">⬇ PDF Report</button>
+    </div>
+  </div>
+  <div class="summary-grid" id="summary-grid"></div>
+  <div class="card">
+    <div class="card-title">Aufstellung</div>
+    <div id="uebersicht-table-container"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Zusammenfassung</div>
+    <div id="zusammenfassung"></div>
+  </div>
+</div>
+
+<!-- EINSTELLUNGEN -->
+<div class="panel" id="tab-einstellungen">
+  <div class="card">
+    <div class="card-title">Mitarbeiter & Fahrzeug</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Name Mitarbeiter</label><input type="text" id="set-name" placeholder="Raffael Pohlin"></div>
+      <div class="form-group"><label>Fahrzeug</label><input type="text" id="set-fahrzeug" placeholder="BMW M3 Competition M XDrive"></div>
+      <div class="form-group"><label>Kennzeichen</label><input type="text" id="set-kz" placeholder="GY482BC"></div>
+      <div class="form-group"><label>Empfänger</label><input type="text" id="set-firma" placeholder="Elpo GmbH"></div>
+      <div class="form-group" style="grid-column:span 2"><label>Adresse</label><input type="text" id="set-adresse" placeholder="Alfred-Amonn-Straße 5"></div>
+      <div class="form-group" style="grid-column:span 2"><label>PLZ / Ort</label><input type="text" id="set-ort" placeholder="I-39031 Bruneck"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="form-grid">
+      <div class="form-group"><label>ACI Tarif (€/km)</label><input type="number" id="set-tarif" value="1.1292" step="0.0001" min="0"></div>
+      <div class="form-group"><label>Trasferte Inland (€)</label><input type="number" id="set-traf-inland" value="30.99" step="0.01"></div>
+      <div class="form-group"><label>Trasferte Ausland (€)</label><input type="number" id="set-traf-ausland" value="51.65" step="0.01"></div>
+    </div>
+    <div style="margin-top:1.1rem"><button class="btn btn-primary" onclick="saveSettings()">✓ Speichern</button></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Info zur Datenspeicherung</div>
+    <div style="font-size:.85rem;color:var(--muted);line-height:1.7">
+      Alle Daten werden im <strong>localStorage</strong> deines Browsers gespeichert. 
+      Die Daten bleiben dauerhaft erhalten – bis du den Browser-Cache/Verlauf löschst oder Cookies für diese Seite entfernst.
+      Es werden keine Daten an externe Server übertragen. Für ein Backup empfiehlt sich ein monatlicher CSV-Export.
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// No external PDF library needed – we parse Telepass PDFs via text extraction
+
+// ===================== STATE =====================
+let state = {
+  fahrten: [],
+  telepass: [],
+  settings: {
+    name:'Raffael Pohlin', fahrzeug:'BMW M3 Competition M XDrive', kz:'GY482BC',
+    firma:'Elpo GmbH', adresse:'Alfred-Amonn-Straße 5', ort:'I-39031 Bruneck',
+    tarif:1.1292, trafInland:30.99, trafAusland:51.65,
+  }
+};
+
+function saveState(){ localStorage.setItem('elpo_spesen_v2', JSON.stringify(state)); }
+function loadState(){
+  try {
+    const raw = localStorage.getItem('elpo_spesen_v2');
+    if(raw){ const p = JSON.parse(raw); state = {...state, ...p}; }
+    else {
+      // migrate from old key
+      const old = localStorage.getItem('elpo_spesen');
+      if(old){ const p = JSON.parse(old); state = {...state, ...p}; saveState(); }
+    }
+  } catch(e){}
+}
+function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+// ===================== HELPERS =====================
+function fmt(v){ return v.toFixed(2).replace('.',',')+' €'; }
+function parseEur(s){ return parseFloat(String(s).replace(',','.'))||0; }
+function monthKey(d){ return d.slice(0,7); }
+function monthLabel(k){
+  if(!k) return '';
+  const [y,m] = k.split('-');
+  const n=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  return n[parseInt(m)-1]+' '+y;
+}
+function formatDate(d){ if(!d) return ''; const [y,m,day]=d.split('-'); return `${day}.${m}.${y}`; }
+function getAllMonths(){
+  const keys = new Set();
+  state.fahrten.forEach(f=>keys.add(monthKey(f.datum)));
+  state.telepass.forEach(t=>keys.add(monthKey(t.datum)));
+  const now = new Date().toISOString().slice(0,7);
+  keys.add(now);
+  return [...keys].sort().reverse();
+}
+
+// ===================== TABS =====================
+function switchTab(name){
+  const names=['erfassung','telepass','uebersicht','einstellungen'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='uebersicht') renderUebersicht();
+  if(name==='einstellungen') loadSettingsUI();
+  if(name==='telepass') renderTelepassList();
+}
+
+// ===================== MONTH PICKERS =====================
+function populateMonthPickers(){
+  const months = getAllMonths();
+  ['erf-monat','sel-monat'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = months.map(m=>`<option value="${m}" ${m===prev?'selected':''}>${monthLabel(m)}</option>`).join('');
+    if(!sel.value && months.length) sel.value = months[0];
+  });
+}
+
+function addCurrentMonth(){
+  const now = new Date().toISOString().slice(0,7);
+  // Just ensure it exists (by setting picker)
+  populateMonthPickers();
+  document.getElementById('erf-monat').value = now;
+  renderFahrten();
+}
+
+// ===================== FAHRTEN =====================
+function addFahrt(){
+  const datum = document.getElementById('inp-datum').value;
+  const ziel  = document.getElementById('inp-ziel').value.trim();
+  const km    = parseInt(document.getElementById('inp-km').value)||0;
+  const traf  = document.getElementById('inp-trasferte').value;
+  const bem   = document.getElementById('inp-bem').value.trim();
+  if(!datum){alert('Datum eingeben.');return;}
+  if(!ziel){alert('Ziel/Beschreibung eingeben.');return;}
+  if(km<=0){alert('Kilometeranzahl eingeben.');return;}
+  state.fahrten.push({id:genId(),datum,ziel,km,trasferte:traf,bemerkungen:bem});
+  state.fahrten.sort((a,b)=>a.datum.localeCompare(b.datum));
+  saveState(); populateMonthPickers();
+  // set picker to this month
+  document.getElementById('erf-monat').value = monthKey(datum);
+  renderFahrten();
+  document.getElementById('inp-ziel').value='';
+  document.getElementById('inp-km').value='';
+  document.getElementById('inp-bem').value='';
+  document.getElementById('inp-trasferte').value='none';
+}
+
+function deleteFahrt(id){
+  state.fahrten=state.fahrten.filter(f=>f.id!==id);
+  saveState(); renderFahrten();
+}
+
+function renderFahrten(){
+  const sel = document.getElementById('erf-monat');
+  if(!sel) return;
+  const month = sel.value;
+  const fahrten = state.fahrten.filter(f=>monthKey(f.datum)===month);
+  const count = document.getElementById('erf-count');
+  if(count) count.textContent = `${fahrten.length} Eintrag${fahrten.length!==1?'e':''}`;
+  const cont = document.getElementById('fahrten-container');
+  if(!fahrten.length){
+    cont.innerHTML=`<div class="empty"><div class="empty-icon">🚗</div>Noch keine Fahrten für ${monthLabel(month)} eingetragen.</div>`;
+    return;
+  }
+  const rows = fahrten.map(f=>{
+    const trafBadge = f.trasferte==='inland'?`<span class="badge badge-inland">Inland</span>`
+      :f.trasferte==='ausland'?`<span class="badge badge-ausland">Ausland</span>`
+      :`<span style="color:var(--muted)">—</span>`;
+    const trafVal = f.trasferte==='inland'?fmt(state.settings.trafInland)
+      :f.trasferte==='ausland'?fmt(state.settings.trafAusland):'—';
+    return `<tr>
+      <td>${formatDate(f.datum)}</td>
+      <td>${f.ziel}</td>
+      <td style="color:var(--muted);font-size:.8rem">${f.bemerkungen||'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${f.km}</td>
+      <td>${trafBadge}</td>
+      <td style="text-align:right">${trafVal}</td>
+      <td style="text-align:right;font-weight:600">${fmt(f.km*state.settings.tarif)}</td>
+      <td><button class="btn btn-danger" onclick="deleteFahrt('${f.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML=`<table class="data-table">
+    <thead><tr><th>Datum</th><th>Ziel / Beschreibung</th><th>Bem.</th><th style="text-align:right">km</th><th>Trasferte</th><th style="text-align:right">Trasferte €</th><th style="text-align:right">km-Spesen</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ===================== TELEPASS PDF IMPORT =====================
+function handleDragOver(e){
+  e.preventDefault(); document.getElementById('drop-zone').classList.add('dragging');
+}
+function handleDragLeave(e){
+  document.getElementById('drop-zone').classList.remove('dragging');
+}
+function handleDrop(e){
+  e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragging');
+  const files = e.dataTransfer.files;
+  if(files.length>0) processPDF(files[0]);
+}
+function handleFileSelect(e){
+  if(e.target.files.length>0) processPDF(e.target.files[0]);
+}
+
+// ===================== PDF.JS SETUP =====================
+function initPdfJs(){
+  if(typeof pdfjsLib === 'undefined') return false;
+  // Worker must be in the same folder as the HTML file
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+  return true;
+}
+
+async function processPDF(file){
+  const status = document.getElementById('import-status');
+  status.innerHTML=`<div class="info-box">⏳ PDF wird gelesen...</div>`;
+
+  // Primary: pdfjs (handles all compressed/modern PDFs)
+  if(initPdfJs()){
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+      let fullText = '';
+      for(let i=1; i<=pdf.numPages; i++){
+        const page = await pdf.getPage(i);
+        const tc = await page.getTextContent();
+        const items = tc.items
+          .filter(it => it.str && it.str.trim())
+          .sort((a,b)=>{
+            const dy = Math.abs(b.transform[5]-a.transform[5]);
+            if(dy > 5) return b.transform[5]-a.transform[5];
+            return a.transform[4]-b.transform[4];
+          });
+        fullText += items.map(it=>it.str).join(' ') + '\n';
+      }
+      if(fullText.replace(/\s/g,'').length > 20){
+        parseTelepassText(fullText, file.name);
+        return;
+      }
+    } catch(err){ console.warn('pdfjs error:', err.message); }
+  }
+
+  // Fallback: raw Tj/TJ extraction (uncompressed PDFs)
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let raw = '';
+    for(let i=0;i<bytes.length;i++) raw+=String.fromCharCode(bytes[i]);
+    let fullText = '';
+    const tjRe = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*(?:Tj|'|")/g;
+    const tjArrRe = /\[([^\[\]]*)\]\s*TJ/g;
+    let m;
+    while((m=tjRe.exec(raw))!==null){
+      let s=m[1].replace(/\\n/g,' ').replace(/\\r/g,' ').replace(/\\t/g,' ')
+        .replace(/\\\(/g,'(').replace(/\\\)/g,')').replace(/\\\\/g,'\\');
+      fullText+=s+' ';
+    }
+    while((m=tjArrRe.exec(raw))!==null){
+      let s=m[1].replace(/\(([^)]*)\)/g,'$1').replace(/-?\d+/g,' ');
+      fullText+=s+' ';
+    }
+    if(fullText.replace(/\s/g,'').length > 20){
+      parseTelepassText(fullText, file.name);
+      return;
+    }
+  } catch(e){ console.warn('Raw extraction failed:', e.message); }
+
+  // Both methods failed → text-paste fallback
+  setMode('text');
+  status.innerHTML=`<div class="warn-box" style="line-height:1.7">
+    ⚠ <b>PDF konnte nicht automatisch gelesen werden.</b><br><br>
+    Wahrscheinliche Ursache: <code>pdf.worker.min.js</code> liegt nicht im gleichen Ordner wie <code>elpo_spesennote.html</code>.<br><br>
+    ✅ <b>Schnelle Alternative:</b> Öffne die Telepass PDF im Browser, drücke <b>Strg+A → Strg+C</b> und füge den Text unten ein.
+  </div>`;
+}
+
+function parseTelepassText(text, filename){
+  const status = document.getElementById('import-status');
+  const parsed = [];
+
+  // Look for date patterns: DD-MM-YYYY HH:MM
+  const dateRegex = /(\d{2}-\d{2}-\d{4})\s+(\d{2}:\d{2})/g;
+  let match;
+  const datePositions = [];
+  while((match=dateRegex.exec(text))!==null){
+    datePositions.push({index:match.index, date:match[1], time:match[2]});
+  }
+
+  datePositions.forEach((dp,i)=>{
+    const rawDate = dp.date; // DD-MM-YYYY
+    const parts = rawDate.split('-');
+    const datum = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+    // Get the substring from this date to the next date
+    const end = i<datePositions.length-1 ? datePositions[i+1].index : Math.min(dp.index+200, text.length);
+    const segment = text.slice(dp.index, end);
+    // Find amount pattern: digits with comma/dot
+    const amtMatch = segment.match(/(\d+)[,\.](\d{2})\s*€?/);
+    if(amtMatch){
+      const betrag = parseFloat(amtMatch[1]+'.'+amtMatch[2]);
+      // Desc: everything between time and amount
+      const descStart = segment.indexOf(dp.time)+dp.time.length;
+      const descEnd = amtMatch.index;
+      let desc = segment.slice(descStart, descEnd).replace(/Pedaggio/gi,'').trim().replace(/\s+/g,' ');
+      if(!desc) desc = 'Pedaggio';
+      // Deduplicate
+      if(!state.telepass.find(t=>t.datum===datum&&t.betrag===betrag&&t.beschreibung===desc)){
+        parsed.push({id:genId(), datum, uhrzeit:dp.time, beschreibung:desc, betrag});
+      }
+    }
+  });
+
+  parsed.forEach(p=>state.telepass.push(p));
+  saveState();
+
+  if(parsed.length>0){
+    status.innerHTML=`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.75rem 1rem;font-size:.83rem;color:#15803d;">
+      ✓ <strong>${parsed.length} Transaktionen</strong> aus «${filename}» importiert.
+    </div>`;
+  } else {
+    status.innerHTML=`<div class="warn-box">⚠ Keine Transaktionen erkannt. Stellen Sie sicher, dass dies eine Telepass Nota Spese PDF ist.</div>`;
+  }
+  renderTelepassList();
+}
+
+// ===================== MODE TOGGLE =====================
+function setMode(mode){
+  const pdfDiv = document.getElementById('mode-pdf');
+  if(pdfDiv) pdfDiv.style.display = (mode==='pdf') ? '' : 'none';
+}
+
+function importTextMode(){
+  const text = document.getElementById('telepass-text-input').value;
+  if(!text.trim()){ alert('Bitte Text einfügen.'); return; }
+  parseTelepassText(text, 'manuell');
+  document.getElementById('telepass-text-input').value='';
+}
+
+function renderTelepassList(){
+  const cont = document.getElementById('telepass-list-container');
+  if(!state.telepass.length){
+    cont.innerHTML=`<div class="empty"><div class="empty-icon">🛣️</div>Noch keine Telepass-Einträge importiert.</div>`;
+    return;
+  }
+  const sorted=[...state.telepass].sort((a,b)=>b.datum.localeCompare(a.datum));
+  const rows=sorted.map(t=>`<tr>
+    <td>${formatDate(t.datum)} ${t.uhrzeit||''}</td>
+    <td style="font-size:.82rem;color:var(--muted)">${t.beschreibung}</td>
+    <td style="text-align:right;font-weight:600">${fmt(t.betrag)}</td>
+    <td><button class="btn btn-danger" onclick="deleteTelepass('${t.id}')">✕</button></td>
+  </tr>`).join('');
+  const total=state.telepass.reduce((s,t)=>s+t.betrag,0);
+  cont.innerHTML=`<table class="data-table">
+    <thead><tr><th>Datum / Uhrzeit</th><th>Strecke</th><th style="text-align:right">Betrag</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="2" style="text-align:right">Total</td><td style="text-align:right">${fmt(total)}</td><td></td></tr></tfoot>
+  </table>`;
+}
+
+function deleteTelepass(id){ state.telepass=state.telepass.filter(t=>t.id!==id); saveState(); renderTelepassList(); }
+function clearAllTelepass(){
+  if(confirm('Alle Telepass-Einträge löschen?')){
+    state.telepass=[]; saveState(); renderTelepassList();
+  }
+}
+
+// ===================== ÜBERSICHT =====================
+function renderUebersicht(){
+  populateMonthPickers();
+  const month = document.getElementById('sel-monat').value || getAllMonths()[0];
+  const fahrten=state.fahrten.filter(f=>monthKey(f.datum)===month);
+  const telepass=state.telepass.filter(t=>monthKey(t.datum)===month);
+  const s=state.settings;
+  const totalKm=fahrten.reduce((s2,f)=>s2+f.km,0);
+  const kmSpesen=totalKm*s.tarif;
+  const trasferten=fahrten.reduce((acc,f)=>{
+    if(f.trasferte==='inland') return acc+s.trafInland;
+    if(f.trasferte==='ausland') return acc+s.trafAusland;
+    return acc;
+  },0);
+  const tpTotal=telepass.reduce((a,t)=>a+t.betrag,0);
+  const total=kmSpesen+trasferten+tpTotal;
+
+  document.getElementById('summary-grid').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Gefahrene km</div><div class="stat-value">${totalKm.toLocaleString('de-AT')}</div><div class="stat-sub">km gesamt</div></div>
+    <div class="stat-card"><div class="stat-label">km-Spesen</div><div class="stat-value">${fmt(kmSpesen)}</div><div class="stat-sub">@ ${s.tarif} €/km</div></div>
+    <div class="stat-card"><div class="stat-label">Trasferte</div><div class="stat-value">${fmt(trasferten)}</div><div class="stat-sub">${fahrten.filter(f=>f.trasferte!=='none').length} Fahrten</div></div>
+    <div class="stat-card"><div class="stat-label">Telepass</div><div class="stat-value">${fmt(tpTotal)}</div><div class="stat-sub">${telepass.length} Transaktionen</div></div>
+    <div class="stat-card highlight"><div class="stat-label">Summe Total</div><div class="stat-value">${fmt(total)}</div><div class="stat-sub">Spesen + km</div></div>`;
+
+  const tableCont=document.getElementById('uebersicht-table-container');
+  if(!fahrten.length&&!telepass.length){
+    tableCont.innerHTML=`<div class="empty"><div class="empty-icon">📋</div>Keine Einträge für ${monthLabel(month)}.</div>`;
+  } else {
+    const rows=fahrten.map(f=>{
+      const tp=telepass.filter(t=>t.datum===f.datum).reduce((a,t)=>a+t.betrag,0);
+      const tv=f.trasferte==='inland'?s.trafInland:f.trasferte==='ausland'?s.trafAusland:0;
+      return `<tr>
+        <td>${f.datum.slice(8,10)}</td><td>${f.ziel}</td>
+        <td style="font-size:.8rem;color:var(--muted)">${f.bemerkungen||''}</td>
+        <td style="text-align:right">${f.km}</td>
+        <td style="text-align:right">${tv>0?fmt(tv):'—'}</td>
+        <td style="text-align:right">${tp>0?fmt(tp):'—'}</td>
+        <td style="text-align:right;font-weight:600">${fmt(f.km*s.tarif+(tv||0)+(tp||0))}</td>
+      </tr>`;
+    }).join('');
+    tableCont.innerHTML=`<table class="data-table">
+      <thead><tr><th>Tag</th><th>Ziel / Beschreibung</th><th>Bem.</th><th style="text-align:right">km</th><th style="text-align:right">Trasferte</th><th style="text-align:right">Telepass</th><th style="text-align:right">Gesamt</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="3" style="text-align:right">Summe</td><td style="text-align:right">${totalKm}</td><td style="text-align:right">${fmt(trasferten)}</td><td style="text-align:right">${fmt(tpTotal)}</td><td style="text-align:right">${fmt(kmSpesen+trasferten+tpTotal)}</td></tr></tfoot>
+    </table>`;
+  }
+
+  document.getElementById('zusammenfassung').innerHTML=`
+    <table style="width:100%;font-size:.9rem;border-collapse:collapse">
+      <tr><td style="padding:.4rem 0;color:var(--muted)">Spesen für gefahrene km (${totalKm} km × ${s.tarif} €/km)</td><td style="text-align:right;font-weight:600">${fmt(kmSpesen)}</td></tr>
+      <tr><td style="padding:.4rem 0;color:var(--muted)">Spesen für Tagespauschale Trasferte</td><td style="text-align:right;font-weight:600">${fmt(trasferten)}</td></tr>
+      <tr><td style="padding:.4rem 0;color:var(--muted)">Sonstige Spesen – Telepass</td><td style="text-align:right;font-weight:600">${fmt(tpTotal)}</td></tr>
+      <tr style="border-top:2px solid var(--border)"><td style="padding:.7rem 0;font-weight:700;font-size:1rem">Summe Total Spesen + km</td><td style="text-align:right;font-weight:700;font-size:1.1rem;color:var(--elpo-blue)">${fmt(total)}</td></tr>
+    </table>`;
+}
+
+// ===================== PDF EXPORT (FIXED) =====================
+function exportPDF(){
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  const month = document.getElementById('sel-monat').value || getAllMonths()[0];
+  const fahrten=state.fahrten.filter(f=>monthKey(f.datum)===month);
+  const telepass=state.telepass.filter(t=>monthKey(t.datum)===month);
+  const s=state.settings;
+  const [y,mo]=month.split('-');
+  const mNames=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const mName=mNames[parseInt(mo)-1]+' '+y;
+  const totalKm=fahrten.reduce((s2,f)=>s2+f.km,0);
+  const kmSpesen=totalKm*s.tarif;
+  const trasferten=fahrten.reduce((acc,f)=>{
+    if(f.trasferte==='inland') return acc+s.trafInland;
+    if(f.trasferte==='ausland') return acc+s.trafAusland;
+    return acc;
+  },0);
+  const tpTotal=telepass.reduce((a,t)=>a+t.betrag,0);
+  const total=kmSpesen+trasferten+tpTotal;
+
+  const pageW=210, ml=12, mr=12, usable=pageW-ml-mr; // 186mm usable
+
+  // ---- LOGO HEADER (blue bar, logo only) ----
+  doc.setFillColor(29,88,169);
+  doc.rect(0,0,pageW,16,'F');
+  const logoB64 = 'data:image/png;base64,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';
+  try { doc.addImage(logoB64,'PNG',ml,1,34,13); } catch(e){}
+
+  // No Fachbereiche bar, no text labels – logo only in header
+  const fbColors=[[152,17,46],[179,196,32],[74,4,32],[198,110,29],[156,169,182]];
+  const fbLabels=['electrotechnic.','green energy.','automation.','photovoltaic.','service.'];
+  const fbW=usable/5;
+
+  // ---- HEADER BOX ----
+  doc.setFillColor(230,234,240);
+  doc.roundedRect(ml,19,usable,10,2,2,'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10);
+  doc.setTextColor(25,25,50);
+  doc.text('Spesennote für Fahrten Rückvergütung mit Privatfahrzeug',pageW/2,25.5,{align:'center'});
+
+  // ---- META ----
+  const metaY=33;
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+  doc.text('Bezugsmonat/Jahr:',ml,metaY);
+  doc.setFont('helvetica','normal'); doc.text(mName,52,metaY);
+  doc.text(`Fahrzeug: ${s.fahrzeug}`,ml,metaY+5);
+  doc.text(`Kennzeichen: ${s.kz}`,ml,metaY+10);
+  doc.text(`Mitarbeiter: ${s.name}`,ml,metaY+15);
+  doc.setFont('helvetica','bold'); doc.text('An die',140,metaY);
+  doc.setFont('helvetica','bold'); doc.text(s.firma,140,metaY+5);
+  doc.setFont('helvetica','normal'); doc.text(s.adresse,140,metaY+10);
+  doc.text(s.ort,140,metaY+15);
+
+  // TABLE – full date TT.MM.JJJJ, all columns centered
+  const daysInMonth=new Date(parseInt(y),parseInt(mo),0).getDate();
+  const tableBody=[];
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${y}-${mo}-${String(d).padStart(2,'0')}`;
+    const f=fahrten.find(x=>x.datum===dateStr);
+    const tpDay=telepass.filter(t=>t.datum===dateStr);
+    const tpVal=tpDay.reduce((a,t)=>a+t.betrag,0);
+    const fullDateStr=`${String(d).padStart(2,'0')}.${mo}.${y}`;
+    if(f){
+      const tv=f.trasferte==='inland'?s.trafInland:f.trasferte==='ausland'?s.trafAusland:null;
+      let bem=f.bemerkungen||'';
+      if(tv!==null) bem+=(bem?'\n':'')+'Trasferte '+fmt(tv);
+      if(tpVal>0) bem+=(bem?'\n':'')+'Telepass '+fmt(tpVal);
+      tableBody.push([fullDateStr, f.ziel, bem, String(f.km), tv!==null?fmt(tv):'—', tpVal>0?fmt(tpVal):'—']);
+    } else if(tpDay.length>0){
+      tableBody.push([fullDateStr,'','Telepass '+fmt(tpVal),'','—',fmt(tpVal)]);
+    }
+  }
+  // Sum rows
+  tableBody.push([{content:'Summe km',colSpan:3,styles:{fontStyle:'bold',halign:'right'}},{content:String(totalKm),styles:{fontStyle:'bold',halign:'center'}},'','']);
+  tableBody.push([{content:`Spesen à ${s.tarif} € laut Tarif ACI`,colSpan:2,styles:{fontStyle:'bold',halign:'left'}},{content:'Euro',styles:{fontStyle:'bold',halign:'center'}},{content:fmt(kmSpesen),styles:{fontStyle:'bold',halign:'center'}},{content:`${s.tarif} €/km`,colSpan:2,styles:{fontStyle:'bold',halign:'center'}}]);
+
+  // Column widths: 28+52+50+16+20+20 = 186
+  doc.autoTable({
+    startY:52,
+    head:[['Datum','Ziel/Kunde/Beschreibung','Bemerkungen','km','Trasferte €','Spesen €']],
+    body:tableBody,
+    styles:{fontSize:7.5, cellPadding:1.4, overflow:'linebreak', minCellHeight:5, halign:'center', valign:'middle'},
+    headStyles:{fillColor:[29,88,169], textColor:255, fontStyle:'bold', fontSize:7.5, halign:'center'},
+    columnStyles:{
+      0:{cellWidth:28, halign:'center'},
+      1:{cellWidth:52, halign:'left'},
+      2:{cellWidth:50, halign:'left'},
+      3:{cellWidth:16, halign:'center'},
+      4:{cellWidth:20, halign:'center'},
+      5:{cellWidth:20, halign:'center'},
+    },
+    alternateRowStyles:{fillColor:[248,250,252]},
+    margin:{left:ml, right:mr},
+  });
+
+  const fy=doc.lastAutoTable.finalY+7;
+
+  // ZUSAMMENFASSUNG
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('Zusammenfassung:',ml,fy);
+  // ZUSAMMENFASSUNG als klare Tabelle mit Beschriftung
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(30,30,30);
+  doc.text('Zusammenfassung:',ml,fy);
+
+  doc.autoTable({
+    startY:fy+3,
+    head:[['Position','Berechnung','Betrag']],
+    body:[
+      [`Kilometerspesen (${totalKm} km × ${s.tarif} €/km)`, `${totalKm} × ${s.tarif}`, fmt(kmSpesen)],
+      [`Tagespauschale Trasferte (${fahrten.filter(f=>f.trasferte!=='none').length} Fahrten)`, `${fahrten.filter(f=>f.trasferte==='inland').length}× € ${s.trafInland.toFixed(2)} + ${fahrten.filter(f=>f.trasferte==='ausland').length}× € ${s.trafAusland.toFixed(2)}`, fmt(trasferten)],
+      ['Mautgebühren Telepass', `${telepass.length} Transaktionen`, fmt(tpTotal)],
+    ],
+    foot:[[{content:'Summe Total',styles:{fontStyle:'bold'}},'Euro',{content:fmt(total),styles:{fontStyle:'bold'}}]],
+    styles:{fontSize:8.5, cellPadding:2.5},
+    headStyles:{fillColor:[230,234,240], textColor:[30,30,30], fontStyle:'bold', fontSize:8.5},
+    footStyles:{fillColor:[29,88,169], textColor:[255,255,255], fontStyle:'bold', fontSize:9},
+    columnStyles:{
+      0:{cellWidth:106},
+      1:{cellWidth:42, halign:'center'},
+      2:{cellWidth:38, halign:'right'},
+    },
+    margin:{left:ml, right:mr},
+    theme:'grid',
+  });
+
+  const sy=doc.lastAutoTable.finalY+8;
+
+  // SIGNATURE – datum = heute
+  const today=new Date();
+  const todayStr=`${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}.${today.getFullYear()}`;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(30,30,30);
+  doc.text('Unterschrift:',ml,sy);
+  doc.line(35,sy+0.5,100,sy+0.5);
+  doc.text('Datum:',130,sy);
+  doc.text(todayStr,148,sy);
+  doc.setFontSize(7); doc.setTextColor(120,120,120);
+  doc.text(`>1h Fahrtzeit in ITA: Trasferte € ${s.trafInland.toFixed(2)}   |   >1h Fahrtzeit Ausland: Trasferte € ${s.trafAusland.toFixed(2)}`,ml,sy+9);
+
+  // FOOTER FACHBEREICHE
+  const footY=doc.internal.pageSize.height-12;
+  fbColors.forEach((c,i)=>{
+    doc.setFillColor(c[0],c[1],c[2]);
+    doc.rect(ml+i*fbW,footY,fbW,4,'F');
+    doc.setFontSize(5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    doc.text(fbLabels[i],ml+i*fbW+fbW/2,footY+2.7,{align:'center'});
+  });
+  doc.setFillColor(22,33,62);
+  doc.rect(ml,footY+4,usable,4.5,'F');
+  doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(180,190,210);
+  doc.text(`${s.firma} · ${s.adresse} · ${s.ort} · www.elpo.eu`,pageW/2,footY+7.2,{align:'center'});
+
+  doc.save(`Spesennote_${s.name.replace(/\s+/g,'_')}_${mName.replace(/\s+/g,'_')}.pdf`);
+}
+
+// ===================== CSV =====================
+function exportCSV(){
+  const month=document.getElementById('sel-monat').value||getAllMonths()[0];
+  const fahrten=state.fahrten.filter(f=>monthKey(f.datum)===month);
+  const telepass=state.telepass.filter(t=>monthKey(t.datum)===month);
+  const s=state.settings;
+  let csv='Datum;Ziel;Bemerkungen;km;Trasferte €;Telepass €;km-Spesen €\n';
+  fahrten.forEach(f=>{
+    const tp=telepass.filter(t=>t.datum===f.datum).reduce((a,t)=>a+t.betrag,0);
+    const tv=f.trasferte==='inland'?s.trafInland:f.trasferte==='ausland'?s.trafAusland:0;
+    csv+=`${formatDate(f.datum)};${f.ziel};${f.bemerkungen||''};${f.km};${tv.toFixed(2)};${tp.toFixed(2)};${(f.km*s.tarif).toFixed(2)}\n`;
+  });
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`Spesennote_${month}.csv`; a.click();
+}
+
+// ===================== SETTINGS =====================
+function loadSettingsUI(){
+  const s=state.settings;
+  document.getElementById('set-name').value=s.name;
+  document.getElementById('set-fahrzeug').value=s.fahrzeug;
+  document.getElementById('set-kz').value=s.kz;
+  document.getElementById('set-firma').value=s.firma;
+  document.getElementById('set-adresse').value=s.adresse;
+  document.getElementById('set-ort').value=s.ort;
+  document.getElementById('set-tarif').value=s.tarif;
+  document.getElementById('set-traf-inland').value=s.trafInland;
+  document.getElementById('set-traf-ausland').value=s.trafAusland;
+}
+function saveSettings(){
+  state.settings={
+    name:document.getElementById('set-name').value||state.settings.name,
+    fahrzeug:document.getElementById('set-fahrzeug').value||state.settings.fahrzeug,
+    kz:document.getElementById('set-kz').value||state.settings.kz,
+    firma:document.getElementById('set-firma').value||state.settings.firma,
+    adresse:document.getElementById('set-adresse').value||state.settings.adresse,
+    ort:document.getElementById('set-ort').value||state.settings.ort,
+    tarif:parseFloat(document.getElementById('set-tarif').value)||1.1292,
+    trafInland:parseFloat(document.getElementById('set-traf-inland').value)||30.99,
+    trafAusland:parseFloat(document.getElementById('set-traf-ausland').value)||51.65,
+  };
+  saveState(); alert('Einstellungen gespeichert.');
+}
+
+// ===================== INIT =====================
+(function init(){
+  loadState();
+  document.getElementById('inp-datum').value=new Date().toISOString().slice(0,10);
+  populateMonthPickers();
+  renderFahrten();
+  renderTelepassList();
+})();
+</script>
+
+<footer style="border-top:1px solid var(--border);margin-top:auto">
+  <div class="fachbereiche" style="height:32px;font-size:0.72rem">
+    <div class="fb fb-electro">electrotechnic.</div>
+    <div class="fb fb-green">green energy.</div>
+    <div class="fb fb-auto">automation.</div>
+    <div class="fb fb-photo">photovoltaic.</div>
+    <div class="fb fb-service">service.</div>
+  </div>
+  <div style="background:#16213e;padding:.65rem 2rem;text-align:center">
+    <span style="color:rgba(255,255,255,0.45);font-size:.72rem;letter-spacing:.03em">
+      Alfred-Amonn-Straße 5 · I-39031 Bruneck (BZ) · +39 0474 570 700 · www.elpo.eu
+    </span>
+  </div>
+</footer>
+</body>
+</html>
